@@ -1,5 +1,6 @@
 import argparse
 import os
+import time
 
 from tqdm import tqdm
 from selenium import webdriver
@@ -13,7 +14,11 @@ DEFAULT_ORGANISM = "organism.txt"
 DEFAULT_QUERY = "query.txt"
 
 
-def get_argumants() -> argparse.Namespace:
+class DownloadTimeoutException(Exception):
+    pass
+
+
+def get_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="automation: blastp")
     parser.add_argument("-s", "--simple", action="store_true")
     parser.add_argument("-o", "--organism", default=DEFAULT_ORGANISM)
@@ -69,6 +74,23 @@ def run_alignment(browser: webdriver.chrome, query: str, organism: str):
     wait_by_xpath(browser, "//main[@class=\"results content blastp\"]", 300)
 
 
+def wait_download(path: str, limit: int = 100):
+    for i in range(limit):
+        if os.path.exists(path):
+            break
+        else:
+            time.sleep(1)
+    raise DownloadTimeoutException
+
+
+def download_fasta(browser: webdriver.chrome, download: str, organism: str):
+    fastq_download = browser.find_elements(By.XPATH, "//a[contains(text(), \"FASTA (completesequence)\")]")
+    fastq_download.click()
+    raw_path = os.path.join(download, "seqdump.txt")
+    result_path = os.path.join(download, organism + ".txt")
+    wait_download(raw_path)
+    os.rename(raw_path, result_path)
+
 
 def auto_blastp(args: argparse.Namespace):
     query_list: list[str] | None = None
@@ -81,14 +103,21 @@ def auto_blastp(args: argparse.Namespace):
     if query_list is None or organism_list is None:
         print("Error: Incomplete input information.")
     for query in query_list:
+        download = os.path.join(ROOT, "output", query)
+        os.makedirs(download, exist_ok=True)
         for organism in tqdm(organism_list):
-            download = os.path.join(ROOT, "output", query)
-            os.makedirs(download, exist_ok=True)
-            blast = open_new_blastp(download)
-            run_alignment(blast, query, organism)
-
+            try:
+                blast = open_new_blastp(download)
+                run_alignment(blast, query, organism)
+                download_fasta(blast, download, organism)
+            except DownloadTimeoutException:
+                print("Timeout: Download time has exceeded the limit.")
+                continue
+            # except:
+            #     print("Error: Unknown error.")
+            #     continue
 
 
 if __name__ == "__main__":
-    args = get_argumants()
+    args = get_arguments()
     auto_blastp(args)
