@@ -4,6 +4,8 @@ import time
 
 from tqdm import tqdm
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
@@ -34,7 +36,7 @@ def load_input(path: str) -> list[str] | None:
         for enc in ["utf-8", "shift-jis", "cp932"]:
             try:
                 with open(path, "r", encoding=enc) as f:
-                    inputs = f.readlines()
+                    inputs = f.read().splitlines()
                 break
             except UnicodeDecodeError:
                 continue
@@ -62,6 +64,7 @@ def wait_by_xpath(browser: webdriver.chrome, xpath: str, limit: int = 20):
 
 
 def run_alignment(browser: webdriver.chrome, query: str, organism: str):
+    wait_by_xpath(browser, "//div[@id=\"wrap\"]")
     query_box = browser.find_elements(By.XPATH, "//textarea[@id=\"seq\"]")
     query_box[0].send_keys(query)
     organism_input = browser.find_elements(By.XPATH, "//input[@id=\"qorganism\"]")
@@ -70,22 +73,29 @@ def run_alignment(browser: webdriver.chrome, query: str, organism: str):
     suggested_organism = browser.find_elements(By.XPATH, "//li[@role=\"menuitem\"]")
     suggested_organism[0].click()
     run_button = browser.find_elements(By.XPATH, "//input[@class=\"blastbutton\"]")
+    time.sleep(1)  # care delay/lag
     run_button[0].click()
     wait_by_xpath(browser, "//main[@class=\"results content blastp\"]", 300)
 
 
-def wait_download(path: str, limit: int = 100):
+def wait_download(path: str, limit: int = 120):
     for i in range(limit):
         if os.path.exists(path):
-            break
+            return
         else:
             time.sleep(1)
     raise DownloadTimeoutException
 
 
-def download_fasta(browser: webdriver.chrome, download: str, organism: str):
-    fastq_download = browser.find_elements(By.XPATH, "//a[contains(text(), \"FASTA (completesequence)\")]")
-    fastq_download.click()
+def download_result(browser: webdriver.chrome, download: str, organism: str):
+    download_selector = browser.find_elements(By.XPATH, "//button[@class=\"usa-accordion-button usa-nav-link toolsCtr\"]")
+    download_selector[0].click()
+    wait_by_xpath(browser, "//a[contains(text(), \"FASTA (completesequence)\")]")
+    fasta_download = browser.find_elements(By.XPATH, "//a[contains(text(), \"FASTA (completesequence)\")]")
+    action = ActionChains(browser).move_to_element(fasta_download[0])
+    action.click()
+    action.perform()
+    # fasta_download[0].click()
     raw_path = os.path.join(download, "seqdump.txt")
     result_path = os.path.join(download, organism + ".txt")
     wait_download(raw_path)
@@ -103,19 +113,23 @@ def auto_blastp(args: argparse.Namespace):
     if query_list is None or organism_list is None:
         print("Error: Incomplete input information.")
     for query in query_list:
-        download = os.path.join(ROOT, "output", query)
+        download = os.path.join(ROOT, "blastp", query)
         os.makedirs(download, exist_ok=True)
-        for organism in tqdm(organism_list):
+        blastp = open_new_blastp(download)
+        for organism in tqdm(organism_list, desc=f"Now searching <{query}> similarity..."):
             try:
-                blast = open_new_blastp(download)
-                run_alignment(blast, query, organism)
-                download_fasta(blast, download, organism)
+                run_alignment(blastp, query, organism)
+                download_result(blastp, download, organism)
+            except NoSuchElementException:
+                tqdm.write(f"{organism} has no similar seq with {query}.")
+                continue
             except DownloadTimeoutException:
-                print("Timeout: Download time has exceeded the limit.")
+                tqdm.write(f"Timeout: Download time has exceeded the limit.({query}-{organism})")
                 continue
             # except:
-            #     print("Error: Unknown error.")
+            #     tqdm.write("Error: Unknown error.")
             #     continue
+        blastp.get("https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastp&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome")
 
 
 if __name__ == "__main__":
