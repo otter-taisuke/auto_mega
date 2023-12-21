@@ -4,7 +4,7 @@ import time
 
 from tqdm import tqdm
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import ElementNotInteractableException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -49,12 +49,12 @@ def load_input(path: str) -> list[str] | None:
     return inputs
 
 
-def open_new_blastp(download: str) -> webdriver.chrome:
+def open_new_browser(download: str | None = None) -> webdriver.chrome:
     chrome_options = webdriver.ChromeOptions()
-    prefs = {"download.default_directory": download}
-    chrome_options.add_experimental_option("prefs", prefs)
+    if download:
+        prefs = {"download.default_directory": download}
+        chrome_options.add_experimental_option("prefs", prefs)
     browser = webdriver.Chrome(options=chrome_options)
-    browser.get("https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastp&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome")
     return browser
 
 
@@ -63,11 +63,13 @@ def wait_by_xpath(browser: webdriver.chrome, xpath: str, limit: int = 20):
     wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
 
 
-def run_alignment(browser: webdriver.chrome, query: str, organism: str):
+def run_blast(browser: webdriver.chrome, query: str, organism: str):
     wait_by_xpath(browser, "//div[@id=\"wrap\"]")
     query_box = browser.find_elements(By.XPATH, "//textarea[@id=\"seq\"]")
+    query_box[0].clear()
     query_box[0].send_keys(query)
     organism_input = browser.find_elements(By.XPATH, "//input[@id=\"qorganism\"]")
+    organism_input[0].clear()
     organism_input[0].send_keys(organism)
     wait_by_xpath(browser, "//li[@role=\"menuitem\"]")
     suggested_organism = browser.find_elements(By.XPATH, "//li[@role=\"menuitem\"]")
@@ -90,12 +92,13 @@ def wait_download(path: str, limit: int = 120):
 def download_result(browser: webdriver.chrome, download: str, organism: str):
     download_selector = browser.find_elements(By.XPATH, "//button[@class=\"usa-accordion-button usa-nav-link toolsCtr\"]")
     download_selector[0].click()
+
     wait_by_xpath(browser, "//a[contains(text(), \"FASTA (completesequence)\")]")
     fasta_download = browser.find_elements(By.XPATH, "//a[contains(text(), \"FASTA (completesequence)\")]")
-    action = ActionChains(browser).move_to_element(fasta_download[0])
-    action.click()
-    action.perform()
+    browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
     # fasta_download[0].click()
+    action = ActionChains(browser).move_to_element_with_offset(fasta_download[0], 1, 1)
+    action.click().perform()
     raw_path = os.path.join(download, "seqdump.txt")
     result_path = os.path.join(download, organism + ".txt")
     wait_download(raw_path)
@@ -103,35 +106,71 @@ def download_result(browser: webdriver.chrome, download: str, organism: str):
 
 
 def auto_blastp(args: argparse.Namespace):
-    query_list: list[str] | None = None
-    organism_list: list[str] | None = None
     if args.simple:
         query_list = [input("Enter Query Seq :")]
     else:
         query_list = load_input(os.path.join(ROOT, args.query))
     organism_list = load_input(os.path.join(ROOT, args.organism))
-    if query_list is None or organism_list is None:
+    if args.simple and (query_list[0] == "" or organism_list is None):
+        print("Error: Incomplete input information.")
+    elif not args.simple and (query_list is None or organism_list is None):
         print("Error: Incomplete input information.")
     for query in query_list:
         download = os.path.join(ROOT, "blastp", query)
         os.makedirs(download, exist_ok=True)
-        blastp = open_new_blastp(download)
+        browser = open_new_browser(download)
         for organism in tqdm(organism_list, desc=f"Now searching <{query}> similarity..."):
             try:
-                run_alignment(blastp, query, organism)
-                download_result(blastp, download, organism)
-            except NoSuchElementException:
-                tqdm.write(f"{organism} has no similar seq with {query}.")
+                browser.get("https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastp&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome")
+                run_blast(browser, query, organism)
+                download_result(browser, download, organism)
+            except ElementNotInteractableException:
+                tqdm.write(f"<{organism}> has no similar seq with <{query}>.")
+                with open(os.path.join(ROOT, "blastp", f"{query} - no homology.txt"), mode="a") as f:
+                    f.write(organism + "\n")
                 continue
             except DownloadTimeoutException:
                 tqdm.write(f"Timeout: Download time has exceeded the limit.({query}-{organism})")
                 continue
             # except:
-            #     tqdm.write("Error: Unknown error.")
+            #     tqdm.write("Error: Unknown error.({query}-{organism})")
             #     continue
-        blastp.get("https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastp&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome")
+
+
+def assist_blastp():
+    data = os.path.join(ROOT, "assist_data.txt")
+    data_set = load_input(data)
+    query = data_set[0]
+    organism = data_set[1:]
+    browser = open_new_browser()
+    browser.get("https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastp&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome")
+    wait_by_xpath(browser, "//div[@id=\"wrap\"]")
+    try:
+        query_box = browser.find_elements(By.XPATH, "//textarea[@id=\"seq\"]")
+        query_box[0].clear()
+        query_box[0].send_keys(query)
+    except:
+        print("Error: When enter query")
+    for i, org in enumerate(organism):
+        try:
+            if i == 0:
+                input_button = browser.find_elements(By.XPATH, "//input[@id=\"qorganism\"]")
+            else:
+                input_button = browser.find_elements(By.XPATH, f"//input[@id=\"qorganism{i}\"]")
+            input_button[0].clear()
+            input_button[0].send_keys(org)
+            wait_by_xpath(browser, "//li[@role=\"menuitem\"]")
+            suggested_organism = browser.find_elements(By.XPATH, "//li[@role=\"menuitem\"]")
+            suggested_organism[0].click()
+            add_button = browser.find_elements(By.XPATH, "//input[@class=\"usa-button-secondary addOrg\"]")[0]
+            add_button.click()
+        except:
+            print(f"Error: When enter {org}")
+            continue
+    time.sleep(100000)
 
 
 if __name__ == "__main__":
-    args = get_arguments()
-    auto_blastp(args)
+    # args = get_arguments()
+    # auto_blastp(args)
+    assist_blastp()

@@ -1,0 +1,41 @@
+NP_619732.2
+Homo sampiens
+Pan paniscus
+Pan troglodytes
+Gorilla gorilla gorilla
+Nomascus leucogenys
+Macaca fascicularis
+Macaca Mulatta
+Chlorocebus sabaeus
+Papio anubis
+Saimiri boliviensis boliviensis
+Callithrix jacchus
+Carlito syrichta
+Microcebus Murinus
+Mus musculus
+Rattus norvegicus
+Heterocephalus glaber
+Oryctolagus cuniculus
+Tupaia belangeri
+Ailuropoda melanoleuca
+Mustela putorius furo
+Canis lupas
+Felis catus
+Bos taurus
+Ovis aries
+Sus scrofa
+Myotis lucifugus
+Pteropus vampyrus
+Equus caballus
+Dasypus novemcinctus
+Loxodonta africana
+Sarcophilus harrisii
+Monodelphis Domestica
+Ornithorhynchus anatinus
+Geospiza fortis
+Taeniopygia guttata
+Gallus gallus
+Thamnophis sirtalis
+Xenopus laevis
+Xenopus tropicalis
+Danio rerio
