@@ -15,13 +15,16 @@ ROOT = os.path.abspath(os.path.dirname(__file__))
 DEFAULT_ORGANISM = "organism.txt"
 DEFAULT_QUERY = "query.txt"
 
+blastp = "https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastp&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome"
+blastn = "https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastn&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome"
+
 
 class DownloadTimeoutException(Exception):
     pass
 
 
 def get_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="automation: blastp")
+    parser = argparse.ArgumentParser(description="automation: blast")
     parser.add_argument("-s", "--simple", action="store_true")
     parser.add_argument("-o", "--organism", default=DEFAULT_ORGANISM)
     parser.add_argument("-q", "--query", default=DEFAULT_QUERY)
@@ -77,7 +80,7 @@ def run_blast(browser: webdriver.chrome, query: str, organism: str):
     run_button = browser.find_elements(By.XPATH, "//input[@class=\"blastbutton\"]")
     time.sleep(1)  # care delay/lag
     run_button[0].click()
-    wait_by_xpath(browser, "//main[@class=\"results content blastp\"]", 300)
+    wait_by_xpath(browser, "//main[@class=\"results content blast\"]", 300)
 
 
 def wait_download(path: str, limit: int = 120):
@@ -115,18 +118,19 @@ def auto_blastp(args: argparse.Namespace):
         print("Error: Incomplete input information.")
     elif not args.simple and (query_list is None or organism_list is None):
         print("Error: Incomplete input information.")
-    for query in query_list:
-        download = os.path.join(ROOT, "blastp", query)
+    for query_line in query_list:
+        query = query_line.split(",")[0]
+        download = os.path.join(ROOT, "blast", query)
         os.makedirs(download, exist_ok=True)
         browser = open_new_browser(download)
         for organism in tqdm(organism_list, desc=f"Now searching <{query}> similarity..."):
             try:
-                browser.get("https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastp&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome")
+                browser.get(blastn)
                 run_blast(browser, query, organism)
                 download_result(browser, download, organism)
             except ElementNotInteractableException:
                 tqdm.write(f"<{organism}> has no similar seq with <{query}>.")
-                with open(os.path.join(ROOT, "blastp", f"{query} - no homology.txt"), mode="a") as f:
+                with open(os.path.join(ROOT, "blast", f"{query} - no homology.txt"), mode="a") as f:
                     f.write(organism + "\n")
                 continue
             except DownloadTimeoutException:
@@ -138,12 +142,12 @@ def auto_blastp(args: argparse.Namespace):
 
 
 def assist_blastp():
-    data = os.path.join(ROOT, "assist_data.txt")
+    data = os.path.join(ROOT, "blast_assist/assist_data.txt")
     data_set = load_input(data)
     query = data_set[0]
     organism = data_set[1:]
     browser = open_new_browser()
-    browser.get("https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastp&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome")
+    browser.get(blastn)
     wait_by_xpath(browser, "//div[@id=\"wrap\"]")
     try:
         query_box = browser.find_elements(By.XPATH, "//textarea[@id=\"seq\"]")

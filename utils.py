@@ -61,7 +61,21 @@ def get_all_txt():
             f.write(os.path.splitext(os.path.basename(txt))[0]+"\n")
 
 
+def delete_blank(path: str = ""):
+    with open(path, mode="r") as f:
+        lines = f.readlines()
+    with open(os.path.join(os.path.dirname(path), f"{os.path.splitext(os.path.basename(path))[0]}_delB.txt"), mode="w") as f:
+        for line in lines:
+            if line[0] == ">":
+                spl = line.split(" ")
+                f.write(spl[0]+"_"+" ".join(spl[1:]))
+            else:
+                f.write(line)
+
+
+
 if __name__ == "__main__":
     # pickup_same(True)
-    get_all_txt()
-    delete_finished(r"C:\Users\nomur\Desktop\lab\auto_mega\blastp\NP_619732.2\no homology.txt")
+    # get_all_txt()
+    # delete_finished(r"C:\Users\nomur\Desktop\lab\auto_mega\blastp\NP_619732.2\no homology.txt")
+    delete_blank(r"C:\Users\nomur\desktop\lab\auto_mega\fastq_out\carti.txt")

@@ -96,8 +96,9 @@ def auto_clustalw(args):
         print("Error: Incomplete input information.")
     elif not args.simple and (query_list is None):
         print("Error: Incomplete input information.")
-    for query in query_list:
-        blast_result = os.path.join(ROOT, "blastp", query)
+    for query_line in query_list:
+        query = query_line.split(",")[0]
+        blast_result = os.path.join(ROOT, "blast", query)
         result_list = glob.glob(os.path.join(blast_result, "*.txt"))
         download = os.path.join(ROOT, "clustalw", query)
         os.makedirs(download, exist_ok=True)
