@@ -2,14 +2,17 @@ import argparse
 from glob import glob
 import os
 import shutil
+import time
+import webbrowser
 
 import openpyxl as pyxl
 
 
 ROOT = os.path.abspath(os.path.dirname(__file__))
 INPUT_DIR = os.path.join(ROOT, "blast")
-OUTPUT_DIR = os.path.join(ROOT, "fastq_out")
+OUTPUT_DIR = os.path.join(ROOT, "grab_fastq")
 DEFAULT_QUERY = "query.txt"
+TEM_EXCEL = os.path.join(ROOT, "grab_fastq", "template.xlsx")
 
 
 def get_arguments() -> argparse.Namespace:
@@ -24,7 +27,7 @@ def get_arguments() -> argparse.Namespace:
 def load_input(path: str) -> list[str] | None:
     ext = os.path.splitext(path)[1]
     inputs: list[str] | None = None
-    if ext == ".txt":
+    if ext == ".txt" or ext == ".dnd":
         for enc in ["utf-8", "shift-jis", "cp932"]:
             try:
                 with open(path, "r", encoding=enc) as f:
@@ -44,8 +47,8 @@ def load_input(path: str) -> list[str] | None:
 def write_excel(excel_path: str, datas: list[list[str]]):
     wb = pyxl.load_workbook(excel_path)
     ws = wb.active
-    for i, data in enumerate(datas):
-        ws.append(data[i])
+    for data in datas:
+        ws.append(data)
     wb.save(excel_path)
 
 
@@ -62,6 +65,17 @@ def parse_fastq(path: str) -> None | dict:
         else:
             seq_dict[former_seq] += line.splitlines()[0]
     return seq_dict
+
+
+def open_browser(dnd: str) -> None:
+    lines = load_input(dnd)
+    accs = []
+    for line in lines:
+        if line[:3] == "XP_":
+            accs.append(line.split(":")[0])
+    for acc in accs:
+        # webbrowser.open_new_tab(f"https://www.ncbi.nlm.nih.gov/genome/gdv/browser/protein/?id={acc}")
+        print(f"https://www.ncbi.nlm.nih.gov/genome/gdv/browser/protein/?id={acc}")
 
 
 def search_accessions(accessions: list, query: str) -> int | None:
@@ -83,10 +97,16 @@ def grab_fastq(args: argparse.Namespace):
     for query_line in query_lines:
         query = query_line.split(",")[0]
         fastq_dir = os.path.join(ROOT, "blast", query)
+        dnd_dir = os.path.join(ROOT, "clustalw", query)
+        after_dir = os.path.join(fastq_dir, "grabbed")
         fastq_files = glob(os.path.join(fastq_dir, "*.txt"))
+        output_excel = os.path.join(ROOT, "grab_fastq", "excel", f"{query}.xlsx")
+        if not os.path.exists(output_excel):
+            shutil.copy(TEM_EXCEL, output_excel)
         for fastq in fastq_files:
             seq_dict = parse_fastq(fastq)
             species = os.path.splitext(os.path.basename(fastq))[0]
+            dnd_path = os.path.join(dnd_dir, species + ".dnd")
             accessions = []
             seq_keys = list(seq_dict.keys())
             for info in seq_keys:
@@ -95,6 +115,7 @@ def grab_fastq(args: argparse.Namespace):
             print(f"------------- <{species}> -------------")
             for i, accession in enumerate(accessions):
                 print(f"{i+1}: {accession}")
+            open_browser(dnd_path)
             choosed_nums = []
             flag = ""
             while flag != "y":
@@ -132,7 +153,14 @@ def grab_fastq(args: argparse.Namespace):
             #         f.write(">" + "_".join(species.split(" ")) + "_" + seq_keys[int(num)-1][1:] + "\n")
             #         f.write(seq_dict[seq_keys[int(num)-1]] + "\n\n")
 
+            datas = []
+            for i, num in enumerate(choosed_nums):
+                datas.append([species, ">"])
+                datas[i].append(accessions[int(num)])
+                datas[i].append(seq_dict[seq_keys[int(num)]])
+            write_excel(output_excel, datas)
 
+            shutil.move(fastq, os.path.join(after_dir, os.path.basename(fastq)))
 
 
 if __name__ == "__main__":

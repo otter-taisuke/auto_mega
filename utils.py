@@ -2,6 +2,7 @@ import collections
 import glob
 import os
 
+import pandas as pd
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -73,9 +74,32 @@ def delete_blank(path: str = ""):
                 f.write(line)
 
 
+def make_fastq_from_excel(excel_path: str):
+    output_dir = os.path.join(ROOT_DIR, "make_fastq_from_excel")
+    query = os.path.splitext(os.path.basename(excel_path))[0]
+    output_file = os.path.join(output_dir, query + ".txt")
+    os.makedirs(output_dir, exist_ok=True)
+    df = pd.read_excel(excel_path, sheet_name=0, header=0, index_col=None)
+    df = df.fillna("")
+    with open(output_file, mode="a") as f:
+        for initials, protein, access, seq in zip(df["initials"], df["protein name"], df["accession number"], df["sequence"]):
+            if protein == "":
+                protein = "?"
+            f.write(f">{initials}_{protein}_{access}\n{seq}\n\n")
+
+
+def convert__2commma(txt_path: str):
+    with open(txt_path, mode="r") as f:
+        lines = f.readlines()
+    with open(os.path.join(os.path.dirname(txt_path), f"{os.path.splitext(os.path.basename(txt_path))[0]}_comma.txt"), mode="w") as f:
+        for line in lines:
+            f.write(".".join(line.split("_")))
+
 
 if __name__ == "__main__":
     # pickup_same(True)
     # get_all_txt()
     # delete_finished(r"C:\Users\nomur\Desktop\lab\auto_mega\blastp\NP_619732.2\no homology.txt")
-    delete_blank(r"C:\Users\nomur\desktop\lab\auto_mega\fastq_out\carti.txt")
+    # delete_blank(r"C:\Users\nomur\desktop\lab\auto_mega\fastq_out\carti.txt")
+    # make_fastq_from_excel(r"C:\Users\nomur\Desktop\Project - Slc26a13（能村）\2024 slc26a13.xlsx")
+    convert__2commma(r"C:\Users\nomur\Desktop\lab\auto_mega\make_fastq_from_excel\2024 slc26a13.txt")

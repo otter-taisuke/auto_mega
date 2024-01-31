@@ -80,7 +80,7 @@ def run_blast(browser: webdriver.chrome, query: str, organism: str):
     run_button = browser.find_elements(By.XPATH, "//input[@class=\"blastbutton\"]")
     time.sleep(1)  # care delay/lag
     run_button[0].click()
-    wait_by_xpath(browser, "//main[@class=\"results content blast\"]", 300)
+    wait_by_xpath(browser, "//main[contains(@class, \"results content blast\")]", 300)
 
 
 def wait_download(path: str, limit: int = 120):
@@ -95,7 +95,6 @@ def wait_download(path: str, limit: int = 120):
 def download_result(browser: webdriver.chrome, download: str, organism: str):
     download_selector = browser.find_elements(By.XPATH, "//button[@class=\"usa-accordion-button usa-nav-link toolsCtr\"]")
     download_selector[0].click()
-
     wait_by_xpath(browser, "//a[contains(text(), \"FASTA (completesequence)\")]")
     fasta_download = browser.find_elements(By.XPATH, "//a[contains(text(), \"FASTA (completesequence)\")]")
     browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -119,14 +118,15 @@ def auto_blastp(args: argparse.Namespace):
     elif not args.simple and (query_list is None or organism_list is None):
         print("Error: Incomplete input information.")
     for query_line in query_list:
-        query = query_line.split(",")[0]
+        query, code = query_line.split(",")
         download = os.path.join(ROOT, "blast", query)
         os.makedirs(download, exist_ok=True)
         browser = open_new_browser(download)
         for organism in tqdm(organism_list, desc=f"Now searching <{query}> similarity..."):
             try:
-                browser.get(blastn)
-                run_blast(browser, query, organism)
+                browser.get(blastp)
+                run_blast(browser, code, organism)
+                tqdm.write(f"finish search {organism}")
                 download_result(browser, download, organism)
             except ElementNotInteractableException:
                 tqdm.write(f"<{organism}> has no similar seq with <{query}>.")
@@ -136,9 +136,9 @@ def auto_blastp(args: argparse.Namespace):
             except DownloadTimeoutException:
                 tqdm.write(f"Timeout: Download time has exceeded the limit.({query}-{organism})")
                 continue
-            # except:
-            #     tqdm.write("Error: Unknown error.({query}-{organism})")
-            #     continue
+            except:
+                tqdm.write("Error: Unknown error.({query}-{organism})")
+                continue
 
 
 def assist_blastp():
@@ -175,6 +175,6 @@ def assist_blastp():
 
 
 if __name__ == "__main__":
-    # args = get_arguments()
-    # auto_blastp(args)
-    assist_blastp()
+    args = get_arguments()
+    auto_blastp(args)
+    # assist_blastp()
